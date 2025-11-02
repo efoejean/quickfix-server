@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: quickfix-db
+    restart: always
+    environment:
+      POSTGRES_USER: quickfix
+      POSTGRES_PASSWORD: quickfix
+      POSTGRES_DB: quickfix
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: quickfix-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
