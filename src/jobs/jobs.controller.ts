@@ -5,12 +5,13 @@ import { CreateJobDto } from './dto/create-job.dto';
 import { Request } from 'express';
 
 
-@UseGuards(JwtAuthGuard)
+
 @Controller('jobs')
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
   // 🧱 Create a new job (customer only)
+  @UseGuards(JwtAuthGuard)
   @Post()
 async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   const sub = req.user?.sub as string; // Auth0 subject
@@ -38,7 +39,8 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   async get(@Param('id') id: string) {
     return this.jobs.get(id);
   }
-
+  
+@UseGuards(JwtAuthGuard)
   // 🤝 Pro accepts job
   @Post(':id/offer')
   async accept(@Req() req: Request, @Param('id') id: string) {
@@ -46,6 +48,7 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
     return this.jobs.accept(id, proId);
   }
 
+@UseGuards(JwtAuthGuard)
   // ✅ Customer confirms job
   @Post(':id/confirm')
   async confirm(@Req() req: Request, @Param('id') id: string) {

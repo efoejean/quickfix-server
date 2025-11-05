@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateJobDto } from './dto/create-job.dto';
 
 @Injectable()
 export class JobsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(customerAuth0Sub: string, dto: any) {
+  async create(customerAuth0Sub: string, dto: CreateJobDto) {
     const customer = await this.prisma.user.upsert({
       where: { auth0Sub: customerAuth0Sub },
       update: {},
@@ -29,10 +30,17 @@ export class JobsService {
     });
   }
 
-  async search(params: { lat?: number; lng?: number; radiusKm?: number; categoryId?: string }) {
-    // TODO: add Haversine later; MVP filters by status/category
+  async search(params: {
+    lat?: number;
+    lng?: number;
+    radiusKm?: number;
+    categoryId?: string;
+  }) {
     return this.prisma.job.findMany({
-      where: { status: 'open', ...(params.categoryId ? { categoryId: params.categoryId } : {}) },
+      where: {
+        status: 'open',
+        ...(params.categoryId ? { categoryId: params.categoryId } : {}),
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -56,15 +64,25 @@ export class JobsService {
         jobId,
         proId: pro.id,
         acceptedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 min hold
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         status: 'pending_customer',
       },
     });
   }
 
-  async confirm(jobId: string, _customerAuth0Sub: string) {
-    const job = await this.prisma.job.findUnique({ where: { id: jobId } });
-    if (!job) throw new Error('Job not found');
+  async confirm(jobId: string, customerAuth0Sub: string) {
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      include: { customer: true },
+    });
+
+    if (!job) throw new NotFoundException('Job not found');
+
+    // Optional: verify request user actually owns this job
+    if (job.customer?.auth0Sub !== customerAuth0Sub) {
+      // you can throw ForbiddenException here if you wire customer relation
+      throw new NotFoundException('You are not the customer for this job');
+    }
 
     await this.prisma.job.update({
       where: { id: jobId },
