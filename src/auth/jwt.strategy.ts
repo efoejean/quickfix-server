@@ -1,25 +1,36 @@
+// src/auth/jwt.strategy.ts
+import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import * as jwksRsa from 'jwks-rsa';
-import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly configService: ConfigService) {
+    // 👇 read from ConfigService (which uses .env under the hood)
+    const domain = configService.get<string>('AUTH0_DOMAIN');
+    const audience = configService.get<string>('AUTH0_AUDIENCE');
+
+    // Optionally: quick debug
+    console.log('AUTH0_DOMAIN =', domain);
+    console.log('AUTH0_AUDIENCE =', audience);
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      audience: process.env.AUTH0_AUDIENCE,
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
+      audience,
+      issuer: `https://${domain}/`,
       algorithms: ['RS256'],
       secretOrKeyProvider: jwksRsa.passportJwtSecret({
         cache: true,
         rateLimit: true,
-        jwksRequestsPerMinute: 10,
-        jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      }) as any,
+        jwksRequestsPerMinute: 5,
+        jwksUri: `https://${domain}/.well-known/jwks.json`,
+      }),
     });
   }
+
   async validate(payload: any) {
-    return payload; // req.user = payload
+    return payload;
   }
 }
