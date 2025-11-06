@@ -6,6 +6,29 @@ import { CreateJobDto } from './dto/create-job.dto';
 export class JobsService {
   constructor(private readonly prisma: PrismaService) {}
 
+    // ✅ PUBLIC: anyone can see all (open) jobs
+  async findAll() {
+    return this.prisma.job.findMany({
+      where: {
+        status: 'open', // or remove this line if you truly want *all* jobs
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        addressLine: true,
+        lat: true,
+        lng: true,
+        scheduledStartAt: true,
+        timeWindowMins: true,
+        budgetFixedCents: true,
+        status: true,
+        categoryId: true,
+      },
+    });
+  }
+  
   async create(customerAuth0Sub: string, dto: CreateJobDto) {
     const customer = await this.prisma.user.upsert({
       where: { auth0Sub: customerAuth0Sub },

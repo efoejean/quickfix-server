@@ -10,6 +10,12 @@ import { Request } from 'express';
 export class JobsController {
   constructor(private readonly jobs: JobsService) {}
 
+    // ✅ PUBLIC: anyone can see all jobs
+@Get()
+findAll() {
+  return this.jobs.findAll();
+}
+
   // 🧱 Create a new job (customer only)
   @UseGuards(JwtAuthGuard)
   @Post()
