@@ -1,85 +1,158 @@
-import { PrismaClient, Role, JobStatus } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting QuickFix seed...');
+  console.log('🌱 Seeding database...');
 
-  // --- CATEGORIES ---
-  const categories = [
-    'Painting',
-    'Carpentry',
-    'Moving',
-    'Masonry',
-    'Handyman',
-    'Cleaning',
-    'Electrician',
-    'Plumber',
-  ];
-
-  for (const name of categories) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name, description: `${name} jobs`, icon: '🛠️' },
-    });
-  }
-  console.log('✅ Categories seeded');
-
-  // --- USERS ---
-  const customer = await prisma.user.upsert({
-    where: { auth0Sub: 'auth0|customer-demo' },
-    update: {},
-    create: {
-      auth0Sub: 'auth0|customer-demo',
-      role: Role.customer,
-      name: 'John Customer',
-      email: 'customer@example.com',
-    },
-  });
-
-  const pro = await prisma.user.upsert({
-    where: { auth0Sub: 'auth0|pro-demo' },
-    update: {},
-    create: {
-      auth0Sub: 'auth0|pro-demo',
-      role: Role.pro,
-      name: 'Paul Pro',
-      email: 'pro@example.com',
-    },
-  });
-  console.log('✅ Demo users seeded');
-
-  // --- SAMPLE JOB ---
-  const paintingCategory = await prisma.category.findFirst({
-    where: { name: 'Painting' },
-  });
-
-  if (paintingCategory) {
-    await prisma.job.upsert({
-      where: { id: 'demo-job-1' },
-      update: {},
-      create: {
-        id: 'demo-job-1',
-        customerId: customer.id,
-        categoryId: paintingCategory.id,
-        title: 'Paint my living room',
-        description:
-          'Need help painting a 12x15ft living room. I already have the paint.',
-        photos: [],
-        addressLine: '123 Main St',
-        lat: 37.7749,
-        lng: -122.4194,
-        scheduledStartAt: new Date(Date.now() + 86400000), // tomorrow
-        timeWindowMins: 120,
-        budgetFixedCents: 10000,
-        status: JobStatus.open,
+  // --- Categories ---
+  await prisma.category.createMany({
+    data: [
+      {
+        name: 'Plumbing',
+        description: 'Fix leaks, install faucets, and repair pipes.',
       },
-    });
-    console.log('✅ Demo job seeded');
+      {
+        name: 'Electrical',
+        description: 'Install lighting, outlets, or fix wiring issues.',
+      },
+      {
+        name: 'Painting',
+        description: 'Wall, room, and exterior painting jobs.',
+      },
+      {
+        name: 'Cleaning',
+        description: 'House cleaning, deep cleaning, or office cleaning.',
+      },
+    ],
+    skipDuplicates: true,
+  });
+  console.log('✅ Categories created/ensured');
+
+  // --- Users ---
+  const customer = await prisma.user.upsert({
+    where: { auth0Sub: 'auth0|customer1' },
+    update: {},
+    create: {
+      auth0Sub: 'auth0|customer1',
+      name: 'Jane Customer',
+      email: 'customer@example.com',
+      role: Role.customer,
+    },
+  });
+
+  const verifiedPro = await prisma.user.upsert({
+    where: { auth0Sub: 'auth0|pro_verified' },
+    update: {},
+    create: {
+      auth0Sub: 'auth0|pro_verified',
+      name: 'Victor Verified',
+      email: 'pro@example.com',
+      role: Role.pro,
+    },
+  });
+
+  const unverifiedPro = await prisma.user.upsert({
+    where: { auth0Sub: 'auth0|pro_unverified' },
+    update: {},
+    create: {
+      auth0Sub: 'auth0|pro_unverified',
+      name: 'Una Unverified',
+      email: 'newpro@example.com',
+      role: Role.pro, // role is pro, but profile is unverified
+    },
+  });
+
+  console.log('✅ Users created/ensured');
+
+  // --- ProProfiles ---
+  await prisma.proProfile.upsert({
+    where: { userId: verifiedPro.id },
+    update: {},
+    create: {
+      userId: verifiedPro.id,
+      skills: ['plumbing', 'electrical'],
+      bio: 'Experienced handyman with 5+ years in home repairs.',
+      hourlyRate: 50,
+      minJobPrice: 50,
+      maxDistanceKm: 25,
+      verificationStatus: 'verified',
+      portfolioMedia: [],
+    },
+  });
+
+  await prisma.proProfile.upsert({
+    where: { userId: unverifiedPro.id },
+    update: {},
+    create: {
+      userId: unverifiedPro.id,
+      skills: ['cleaning'],
+      bio: 'New to the platform, specializing in home cleaning.',
+      hourlyRate: 25,
+      minJobPrice: 40,
+      maxDistanceKm: 15,
+      verificationStatus: 'unverified',
+      portfolioMedia: [],
+    },
+  });
+
+  console.log('✅ ProProfiles created/ensured');
+
+  // --- Fetch category IDs ---
+  const categories = await prisma.category.findMany();
+  const plumbing = categories.find((c) => c.name === 'Plumbing');
+  const electrical = categories.find((c) => c.name === 'Electrical');
+  const painting = categories.find((c) => c.name === 'Painting');
+
+  if (!plumbing || !electrical || !painting) {
+    throw new Error('Expected Plumbing, Electrical, and Painting categories to exist');
   }
 
-  console.log('🌳 Seed complete!');
+  // --- Jobs ---
+  await prisma.job.createMany({
+    data: [
+      {
+        customerId: customer.id,
+        categoryId: plumbing.id,
+        title: 'Fix leaking kitchen sink',
+        description: 'There’s a small leak under my sink that needs fixing.',
+        addressLine: '123 Main Street, New York, NY',
+        lat: 40.7128,
+        lng: -74.006,
+        scheduledStartAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000), // tomorrow
+        timeWindowMins: 60,
+        budgetFixedCents: 8000, // $80.00
+      },
+      {
+        customerId: customer.id,
+        categoryId: electrical.id,
+        title: 'Install ceiling fan',
+        description: 'Need an electrician to install a new ceiling fan in the bedroom.',
+        addressLine: '55 Wall Street, New York, NY',
+        lat: 40.706,
+        lng: -74.009,
+        scheduledStartAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // in 2 days
+        timeWindowMins: 90,
+        budgetFixedCents: 12000, // $120.00
+      },
+      {
+        customerId: customer.id,
+        categoryId: painting.id,
+        title: 'Paint my living room',
+        description: 'Need help painting my 15x20 ft living room, paint provided.',
+        addressLine: '200 Broadway, New York, NY',
+        lat: 40.71,
+        lng: -74.007,
+        scheduledStartAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // in 3 days
+        timeWindowMins: 180,
+        budgetFixedCents: 20000, // $200.00
+      },
+    ],
+  });
+
+  console.log('✅ Sample jobs created');
+
+  console.log('🌿 Seeding complete!');
 }
 
 main()

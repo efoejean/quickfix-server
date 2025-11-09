@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException , ForbiddenException} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateJobDto } from './dto/create-job.dto';
+import { Role } from '@prisma/client'; 
 
 @Injectable()
 export class JobsService {
@@ -28,12 +29,12 @@ export class JobsService {
       },
     });
   }
-  
+
   async create(customerAuth0Sub: string, dto: CreateJobDto) {
     const customer = await this.prisma.user.upsert({
       where: { auth0Sub: customerAuth0Sub },
       update: {},
-      create: { auth0Sub: customerAuth0Sub, role: 'customer', name: 'User' },
+      create: { auth0Sub: customerAuth0Sub, role: Role.customer,  name: 'User' },
     });
 
     return this.prisma.job.create({
@@ -44,8 +45,8 @@ export class JobsService {
         description: dto.description,
         photos: dto.photos ?? [],
         addressLine: dto.addressLine,
-        lat: dto.lat,
-        lng: dto.lng,
+        lat: dto.lat ?? 0,
+        lng: dto.lng ?? 0,
         scheduledStartAt: new Date(dto.scheduledStartAt),
         timeWindowMins: dto.timeWindowMins,
         budgetFixedCents: dto.budgetFixedCents,
@@ -75,23 +76,55 @@ export class JobsService {
     });
   }
 
-  async accept(jobId: string, proAuth0Sub: string) {
-    const pro = await this.prisma.user.upsert({
+ async accept(jobId: string, proAuth0Sub: string) {
+    // 1. Check job exists
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+
+    // 2. Load user – MUST already exist in our DB
+    const user = await this.prisma.user.findUnique({
       where: { auth0Sub: proAuth0Sub },
-      update: {},
-      create: { auth0Sub: proAuth0Sub, role: 'pro', name: 'Pro' },
+      include: { proProfile: true },
     });
 
+    if (!user) {
+      // We never created an app user for this Auth0 account yet
+      throw new ForbiddenException(
+        'You need a QuickFix account before you can accept jobs.',
+      );
+    }
+
+    // 3. Only role=pro can accept
+    if (user.role !== Role.pro) {
+      throw new ForbiddenException('Only pros can accept jobs');
+    }
+
+    // 4. Optional: require verification
+    if (!user.proProfile || user.proProfile.verificationStatus !== 'verified') {
+      throw new ForbiddenException(
+        'Your pro account must be verified before you can accept jobs.',
+      );
+    }
+
+    // 5. Don’t let them accept their own job
+    if (job.customerId === user.id) {
+      throw new ForbiddenException('You cannot accept your own job');
+    }
+
+    // 6. Create the acceptance
     return this.prisma.jobAcceptance.create({
       data: {
         jobId,
-        proId: pro.id,
+        proId: user.id,
         acceptedAt: new Date(),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         status: 'pending_customer',
       },
     });
   }
+
 
   async confirm(jobId: string, customerAuth0Sub: string) {
     const job = await this.prisma.job.findUnique({
@@ -114,4 +147,18 @@ export class JobsService {
 
     return { ok: true };
   }
+
+  async findMine(customerAuth0Sub: string) {
+  return this.prisma.job.findMany({
+    where: {
+      customer: {
+        auth0Sub: customerAuth0Sub,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+
+
 }

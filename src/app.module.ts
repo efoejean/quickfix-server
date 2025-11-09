@@ -11,6 +11,8 @@ import { JobsController } from './jobs/jobs.controller';
 import { CategoriesController } from './categories/categories.controller';
 import { MessagesController } from './messages/messages.controller';
 import { HealthController } from './health.controller';
+import { UsersController } from './users/users.controller';
+import { UsersService } from './users/users.service';
 
 @Module({
   imports: [
@@ -26,12 +28,14 @@ import { HealthController } from './health.controller';
     JobsController,
     CategoriesController,
     MessagesController,
+    UsersController, 
   ],
   providers: [
     PrismaService,
     JobsService,
     CategoriesService,
     MessagesService,
+    UsersService,    
   ],
 })
 export class AppModule {}

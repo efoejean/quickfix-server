@@ -38,10 +38,17 @@ enum PaymentStatus {
   disputed
 }
 
+enum ProVerificationStatus {
+  unverified  
+  pending      
+  verified     
+  rejected     
+}
+
 model User {
   id           String   @id @default(uuid())
   auth0Sub     String?  @unique
-  role         Role
+  role         Role     @default(customer)  
   name         String
   email        String?  @unique
   phone        String?  @unique
@@ -73,7 +80,7 @@ model ProProfile {
   maxDistanceKm         Float    @default(15)
   serviceAreaGeojson    Json?
   portfolioMedia        String[]
-  verificationStatus    String   @default("unverified")
+  verificationStatus    ProVerificationStatus @default(unverified)
   payoutAccountId       String?
   availableCalendarJson Json?
 }
@@ -96,8 +103,8 @@ model Job {
   description       String
   photos            String[]
   addressLine       String
-  lat               Float
-  lng               Float
+  lat               Float?
+  lng               Float?
   scheduledStartAt  DateTime
   timeWindowMins    Int
   budgetFixedCents  Int

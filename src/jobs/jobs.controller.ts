@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Req, NotFoundException } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { JobsService } from './jobs.service';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -8,20 +8,37 @@ import { Request } from 'express';
 
 @Controller('jobs')
 export class JobsController {
-  constructor(private readonly jobs: JobsService) {}
+  constructor(private readonly jobsService: JobsService) {}
 
     // ✅ PUBLIC: anyone can see all jobs
 @Get()
 findAll() {
-  return this.jobs.findAll();
+  return this.jobsService.findAll();
 }
+
+@UseGuards(JwtAuthGuard)
+@Get('mine')
+async findMine(@Req() req: Request) {
+  const sub = (req as any).user.sub as string;
+  return this.jobsService.findMine(sub);
+}
+
+  // 🔹 NEW: public job details
+  @Get(':id')
+  async getOne(@Param('id') id: string) {
+    const job = await this.jobsService.get(id);
+    if (!job) {
+      throw new NotFoundException('Job not found');
+    }
+    return job;
+  }
 
   // 🧱 Create a new job (customer only)
   @UseGuards(JwtAuthGuard)
   @Post()
 async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   const sub = req.user?.sub as string; // Auth0 subject
-  return this.jobs.create(sub, dto);
+  return this.jobsService.create(sub, dto);
 }
 
   // 🔍 Search open jobs (for pros)
@@ -32,7 +49,7 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
     @Query('radiusKm') radiusKm?: string,
     @Query('categoryId') categoryId?: string,
   ) {
-    return this.jobs.search({
+    return this.jobsService.search({
       lat: Number(lat),
       lng: Number(lng),
       radiusKm: Number(radiusKm || 15),
@@ -43,15 +60,15 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   // 📄 Get job details
   @Get(':id')
   async get(@Param('id') id: string) {
-    return this.jobs.get(id);
+    return this.jobsService.get(id);
   }
   
 @UseGuards(JwtAuthGuard)
   // 🤝 Pro accepts job
-  @Post(':id/offer')
+  @Post(':id/accept')
   async accept(@Req() req: Request, @Param('id') id: string) {
     const proId = req.user?.sub as string;
-    return this.jobs.accept(id, proId);
+    return this.jobsService.accept(id, proId);
   }
 
 @UseGuards(JwtAuthGuard)
@@ -59,6 +76,6 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   @Post(':id/confirm')
   async confirm(@Req() req: Request, @Param('id') id: string) {
     const customerId = req.user?.sub as string;
-    return this.jobs.confirm(id, customerId);
+    return this.jobsService.confirm(id, customerId);
   }
 }

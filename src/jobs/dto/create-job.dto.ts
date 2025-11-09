@@ -20,11 +20,13 @@ export class CreateJobDto {
   @IsString()
   addressLine!: string;
 
+  @IsOptional()
   @IsNumber()
-  lat!: number;
-
+  lat?: number;
+  
+  @IsOptional()
   @IsNumber()
-  lng!: number;
+  lng?: number;
 
   @IsDateString()
   scheduledStartAt!: string;
