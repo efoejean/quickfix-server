@@ -64,12 +64,15 @@ async create(@Req() req: Request, @Body() dto: CreateJobDto) {
   }
   
 @UseGuards(JwtAuthGuard)
-  // 🤝 Pro accepts job
-  @Post(':id/accept')
-  async accept(@Req() req: Request, @Param('id') id: string) {
-    const proId = req.user?.sub as string;
-    return this.jobsService.accept(id, proId);
-  }
+// 🤝 Pro accepts job
+@Post(':id/accept')
+async accept(@Req() req: Request, @Param('id') id: string) {
+  console.log('➡️ POST /jobs/:id/accept called with id =', id);
+  const proId = (req as any).user?.sub as string;
+  console.log('➡️ Auth user sub =', proId);
+  return this.jobsService.accept(id, proId);
+}
+
 
 @UseGuards(JwtAuthGuard)
   // ✅ Customer confirms job

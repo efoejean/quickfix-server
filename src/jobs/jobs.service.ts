@@ -76,54 +76,56 @@ export class JobsService {
     });
   }
 
- async accept(jobId: string, proAuth0Sub: string) {
-    // 1. Check job exists
-    const job = await this.prisma.job.findUnique({
-      where: { id: jobId },
-    });
-    if (!job) throw new NotFoundException('Job not found');
+async accept(jobId: string, proAuth0Sub: string) {
+  // 1. Check job exists
+  const job = await this.prisma.job.findUnique({
+    where: { id: jobId },
+  });
+  if (!job) throw new NotFoundException('Job not found');
 
-    // 2. Load user – MUST already exist in our DB
-    const user = await this.prisma.user.findUnique({
-      where: { auth0Sub: proAuth0Sub },
-      include: { proProfile: true },
-    });
+  // 2. Load user by auth0Sub + proProfile
+  const user = await this.prisma.user.findUnique({
+    where: { auth0Sub: proAuth0Sub },
+    include: { proProfile: true },
+  });
 
-    if (!user) {
-      // We never created an app user for this Auth0 account yet
-      throw new ForbiddenException(
-        'You need a QuickFix account before you can accept jobs.',
-      );
-    }
-
-    // 3. Only role=pro can accept
-    if (user.role !== Role.pro) {
-      throw new ForbiddenException('Only pros can accept jobs');
-    }
-
-    // 4. Optional: require verification
-    if (!user.proProfile || user.proProfile.verificationStatus !== 'verified') {
-      throw new ForbiddenException(
-        'Your pro account must be verified before you can accept jobs.',
-      );
-    }
-
-    // 5. Don’t let them accept their own job
-    if (job.customerId === user.id) {
-      throw new ForbiddenException('You cannot accept your own job');
-    }
-
-    // 6. Create the acceptance
-    return this.prisma.jobAcceptance.create({
-      data: {
-        jobId,
-        proId: user.id,
-        acceptedAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        status: 'pending_customer',
-      },
-    });
+  if (!user) {
+    throw new ForbiddenException(
+      'You need a QuickFix account before you can accept jobs.',
+    );
   }
+
+  if (!user.proProfile || user.proProfile.verificationStatus !== 'verified') {
+    throw new ForbiddenException(
+      'You must have a verified pro account to accept jobs.',
+    );
+  }
+
+  if (job.customerId === user.id) {
+    throw new ForbiddenException('You cannot accept your own job');
+  }
+
+  const alreadyAccepted = await this.prisma.jobAcceptance.findFirst({
+    where: {
+      jobId,
+      proId: user.id,
+    },
+  });
+  if (alreadyAccepted) {
+    throw new ForbiddenException('You have already offered to take this job.');
+  }
+
+  return this.prisma.jobAcceptance.create({
+    data: {
+      jobId,
+      proId: user.id,
+      acceptedAt: new Date(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      status: 'pending_customer',
+    },
+  });
+}
+
 
 
   async confirm(jobId: string, customerAuth0Sub: string) {
