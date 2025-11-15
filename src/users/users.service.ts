@@ -2,6 +2,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpsertProProfileDto } from './dto/upsert-pro-profile.dto';
+import { ProVerificationStatus , Role} from '@prisma/client'; // 👈 add this
 
 @Injectable()
 export class UsersService {
@@ -85,7 +86,7 @@ async upsertFromAuth0(
         maxDistanceKm: dto.maxDistanceKm ?? 15,
         serviceAreaGeojson: dto.serviceAreaGeojson,
         portfolioMedia: dto.portfolioMedia ?? [],
-        verificationStatus: 'unverified', 
+        verificationStatus: ProVerificationStatus.unverified, 
       },
       update: {
         skills: dto.skills,
@@ -109,7 +110,7 @@ async upsertFromAuth0(
       throw new BadRequestException('No pro profile to submit.');
     }
 
-    if (pro.verificationStatus === 'pending') {
+    if (pro.verificationStatus === ProVerificationStatus.pending) {
       throw new BadRequestException('Profile already pending verification.');
     }
 
@@ -117,8 +118,55 @@ async upsertFromAuth0(
     return this.prisma.proProfile.update({
       where: { userId },
       data: {
-        verificationStatus: 'pending',
+        verificationStatus: ProVerificationStatus.pending,
       },
     });
   }
+
+    // 🔎 List pro profiles (optionally filtered by status)
+  async listProProfiles(status?: ProVerificationStatus) {
+    return this.prisma.proProfile.findMany({
+      where: status ? { verificationStatus: status } : {},
+      include: {
+        user: true, // so admin can see name, email, phone
+      },
+    });
+  }
+
+// ✅ Set pro profile status (verify / reject, etc.)
+  async setProProfileStatus(
+    proProfileId: string,
+    status: ProVerificationStatus,
+  ) {
+    const data: any = {
+      verificationStatus: status,
+    };
+
+    // When a profile is verified → upgrade user to "pro"
+    if (status === ProVerificationStatus.verified) {
+      data.user = {
+        update: {
+          role: Role.pro,
+        },
+      };
+    }
+
+    // (Optional) if you ever want to downgrade on reject:
+    if (status === ProVerificationStatus.rejected) {
+      data.user = {
+        update: {
+          role: Role.customer,
+        },
+      };
+    }
+
+    return this.prisma.proProfile.update({
+      where: { id: proProfileId },
+      data,
+      include: { user: true },
+    });
+  }
+
 }
+
+

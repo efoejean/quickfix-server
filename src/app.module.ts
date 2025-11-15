@@ -13,6 +13,7 @@ import { MessagesController } from './messages/messages.controller';
 import { HealthController } from './health.controller';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersService } from './users/users.service';
       isGlobal: true,
     }),
     AuthModule,
+    AdminModule,
   ],
   controllers: [
     DemoController,
@@ -29,6 +31,7 @@ import { UsersService } from './users/users.service';
     CategoriesController,
     MessagesController,
     UsersController, 
+    
   ],
   providers: [
     PrismaService,

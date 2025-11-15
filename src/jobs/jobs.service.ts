@@ -95,6 +95,9 @@ async accept(jobId: string, proAuth0Sub: string) {
     );
   }
 
+  if (user.role !== Role.pro) {
+    throw new ForbiddenException('Only pros can accept jobs.');
+  } 
   if (!user.proProfile || user.proProfile.verificationStatus !== 'verified') {
     throw new ForbiddenException(
       'You must have a verified pro account to accept jobs.',
