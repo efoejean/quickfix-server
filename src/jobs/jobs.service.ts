@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException , ForbiddenException} from '@nestjs/common';
+import { Injectable, NotFoundException , ForbiddenException, BadRequestException} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateJobDto } from './dto/create-job.dto';
 import { Role } from '@prisma/client'; 
@@ -164,6 +164,116 @@ async accept(jobId: string, proAuth0Sub: string) {
   });
 }
 
+async findAsPro(auth0Sub: string) {
+  return this.prisma.job.findMany({
+    where: {
+      acceptances: {
+        some: {
+          pro: {          // 👈 relation vers User
+            auth0Sub,     // 👈 on filtre directement sur le user
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      customer: true,
+      category: true,
+      acceptances: {
+        include: {
+          pro: true,      
+        },
+      },
+    },
+  });
+}
 
+
+
+ /** Jobs où ce pro a une acceptance */
+  async findForPro(proAuth0Sub: string) {
+    const pro = await this.prisma.user.findUnique({
+      where: { auth0Sub: proAuth0Sub },
+    });
+
+    if (!pro) {
+      throw new ForbiddenException('Pro user not found');
+    }
+
+    return this.prisma.job.findMany({
+      where: {
+        acceptances: {
+          some: {
+            proId: pro.id,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        customer: true,
+        category: true,
+        acceptances: true,
+      },
+    });
+  }
+
+  /** Pro démarre le job */
+  async start(jobId: string, proAuth0Sub: string) {
+    const pro = await this.prisma.user.findUnique({
+      where: { auth0Sub: proAuth0Sub },
+    });
+    if (!pro) throw new ForbiddenException('Pro user not found');
+
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      include: { acceptances: true },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+
+    const accepted = job.acceptances.some((a) => a.proId === pro.id);
+    if (!accepted) {
+      throw new ForbiddenException('You have not accepted this job.');
+    }
+
+    if (job.status !== 'accepted' && job.status !== 'in_progress') {
+      throw new BadRequestException(
+        `Cannot start job from status "${job.status}".`,
+      );
+    }
+
+    return this.prisma.job.update({
+      where: { id: jobId },
+      data: { status: 'in_progress' },
+    });
+  }
+
+  /** Pro termine le job */
+  async complete(jobId: string, proAuth0Sub: string) {
+    const pro = await this.prisma.user.findUnique({
+      where: { auth0Sub: proAuth0Sub },
+    });
+    if (!pro) throw new ForbiddenException('Pro user not found');
+
+    const job = await this.prisma.job.findUnique({
+      where: { id: jobId },
+      include: { acceptances: true },
+    });
+    if (!job) throw new NotFoundException('Job not found');
+
+    const accepted = job.acceptances.some((a) => a.proId === pro.id);
+    if (!accepted) {
+      throw new ForbiddenException('You have not accepted this job.');
+    }
+
+    if (job.status !== 'in_progress') {
+      throw new BadRequestException('Job is not in progress.');
+    }
+
+    return this.prisma.job.update({
+      where: { id: jobId },
+      data: { status: 'completed' },
+    });
+  }
+  
 
 }

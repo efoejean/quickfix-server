@@ -20,8 +20,6 @@ export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
 
   // ✅ PUBLIC: list or search jobs
-  // If query params are present → do a search
-  // If no query params → return all open jobs
   @Get()
   async listOrSearch(
     @Query('lat') lat?: string,
@@ -41,8 +39,23 @@ export class JobsController {
       });
     }
 
-    // no search filters → return all open jobs
     return this.jobsService.findAll();
+  }
+
+  // 👤 Customer's own jobs
+  @UseGuards(JwtAuthGuard)
+  @Get('mine')
+  async findMine(@Req() req: Request) {
+    const sub = (req as any).user.sub as string;
+    return this.jobsService.findMine(sub);
+  }
+
+  // 🧑‍🔧 Pro – jobs où je suis pro
+  @UseGuards(JwtAuthGuard)
+  @Get('aspro')
+  async findAsPro(@Req() req: Request) {
+    const sub = (req as any).user.sub as string;
+    return this.jobsService.findAsPro(sub);
   }
 
   // 📄 PUBLIC: Get job details
@@ -63,21 +76,11 @@ export class JobsController {
     return this.jobsService.create(sub, dto);
   }
 
-  // 👤 Customer's own jobs
-  @UseGuards(JwtAuthGuard)
-  @Get('mine')
-  async findMine(@Req() req: Request) {
-    const sub = (req as any).user.sub as string;
-    return this.jobsService.findMine(sub);
-  }
-
   // 🤝 Pro accepts job
   @UseGuards(JwtAuthGuard)
   @Post(':id/accept')
   async accept(@Req() req: Request, @Param('id') id: string) {
-    console.log('➡️ POST /jobs/:id/accept called with id =', id);
     const proSub = (req as any).user?.sub as string;
-    console.log('➡️ Auth user sub =', proSub);
     return this.jobsService.accept(id, proSub);
   }
 
@@ -87,5 +90,21 @@ export class JobsController {
   async confirm(@Req() req: Request, @Param('id') id: string) {
     const customerSub = (req as any).user?.sub as string;
     return this.jobsService.confirm(id, customerSub);
+  }
+
+  // 🚀 Pro démarre le job
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/start')
+  async start(@Req() req: Request, @Param('id') id: string) {
+    const proSub = (req as any).user?.sub as string;
+    return this.jobsService.start(id, proSub);
+  }
+
+  // ✅ Pro termine le job
+  @UseGuards(JwtAuthGuard)
+  @Post(':id/complete')
+  async complete(@Req() req: Request, @Param('id') id: string) {
+    const proSub = (req as any).user?.sub as string;
+    return this.jobsService.complete(id, proSub);
   }
 }
